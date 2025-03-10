@@ -1,0 +1,7 @@
+SEED = 42 
+
+# dataset path
+DATA_PATH = "ESC-50-master/"
+META_DATA_PATH = "meta/esc50.csv" 
+AUDIO_PATH = "audio"
+AUGMENTED_PATH = "ESC-50-augmented-data"
