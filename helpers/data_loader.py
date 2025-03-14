@@ -16,7 +16,7 @@ class DataPrerparation(pl.LightningDataModule):
         train_loader = DataLoader(
             dataset = self.train_dataset,
             num_workers = config.num_workers,
-            batch_size = config.batch_size // self.device_num,
+            batch_size = config.batch_size,
             shuffle = False,
             sampler = train_sampler
         )
@@ -26,7 +26,7 @@ class DataPrerparation(pl.LightningDataModule):
         eval_loader = DataLoader(
             dataset = self.eval_dataset,
             num_workers = config.num_workers,
-            batch_size = config.batch_size // self.device_num,
+            batch_size = config.batch_size,
             shuffle = False,
             sampler = eval_sampler
         )
@@ -36,7 +36,7 @@ class DataPrerparation(pl.LightningDataModule):
         test_loader = DataLoader(
             dataset = self.eval_dataset,
             num_workers = config.num_workers,
-            batch_size = config.batch_size // self.device_num,
+            batch_size = config.batch_size,
             shuffle = False,
             sampler = test_sampler
         )

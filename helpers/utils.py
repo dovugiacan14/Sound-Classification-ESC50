@@ -41,7 +41,6 @@ def get_mix_lambda(mixup_alpha, batch_size):
     ]
     return np.array(mixup_lambdas).astype(np.float32)
 
-
 class AsymmetricLoss(nn.Module):
     def __init__(
         self,

@@ -212,7 +212,9 @@ class SEDWrapper(pl.LightningModule):
             else:
                 self.log("acc", metric_dict["acc"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
             dist.barrier()
-    
+
+    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
+        scheduler.step()
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
