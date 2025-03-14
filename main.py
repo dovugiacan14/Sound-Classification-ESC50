@@ -6,6 +6,7 @@ import numpy as np
 from dotenv import load_dotenv
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint 
+import torch.multiprocessing as mp
 
 from helpers.utils import create_path
 from helpers.data_processor import ESC_Dataset
@@ -65,13 +66,12 @@ def train():
         default_root_dir = checkpoint_dir,
         gpus = device_num, 
         val_check_interval = 1.0,
-        max_epochs = config.max_epoch,
+        max_epochs = config.max_epochs,
         auto_lr_find = True,    
         sync_batchnorm = True,
         callbacks = [checkpoint_callback],
         accelerator = "ddp" if device_num > 1 else None,
         num_sanity_val_steps = 0,
-        resume_from_checkpoint = None, 
         replace_sampler_ddp = False,
         gradient_clip_val=1.0
     )
@@ -113,4 +113,5 @@ if __name__ == "__main__":
         format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
         datefmt="%Y-%m-%d %H:%M:%S"  # Timestamp format
     )
+    mp.set_start_method("spawn", force=True)
     train()
