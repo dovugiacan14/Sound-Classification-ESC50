@@ -60,7 +60,7 @@ class ESC50Processor:
         self.resample_path = resample_path
         self.savedata_path = savedata_path
 
-    def resample(self, sample_rate=320000):
+    def resample(self, sample_rate=32000):
         """Resample all input audio files and save to resample_path."""
         try:
             if not os.path.exists(self.audio_path):
