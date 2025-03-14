@@ -1,117 +1,117 @@
 import os
+import torch
+import config
 import logging
 import numpy as np
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder
+from dotenv import load_dotenv
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint 
+import torch.multiprocessing as mp
 
-from config import *
-from core.trainer import train
-from data.argument import DataArgumentor
-from data.extraction import extract_audio_features
-from data.preprocessing import split_and_normalize
-from core.models import AudioCNN
-from core.predict import evaluate_models
-from visualizer.visualize import (
-    display_model_comparision, 
-    display_accuracy_summary, 
-    display_model_results, 
-    plot_confusion_matrices, 
-)
+from helpers.utils import create_path
+from helpers.data_processor import ESC_Dataset
+from helpers.data_loader import DataPrerparation
+from models.sed_model import SEDWrapper
+from models.htsat import HTSAT_Swin_Transformer
 
-data_path = DATA_PATH, 
-meta_data_path = META_DATA_PATH
-audio_path = AUDIO_PATH 
-augmented_path = AUGMENTED_PATH
 
-def main():
-    # Load dataset
-    csv_path = os.path.join(data_path, meta_data_path)
-    dataset = pd.read_csv(csv_path)
-    dataset["files_path"] = dataset["filename"].apply(
-        lambda x: os.path.join(audio_path, x)
+load_dotenv()
+device_num = torch.cuda.device_count()
+DATA_PATH = os.environ.get("DATA_PATH")
+
+# create folder to save result  
+exp_dir = os.path.join(config.workspace, "results", config.exp_name)
+checkpoint_dir = os.path.join(config.workspace, "results", config.exp_name, "checkpoint")
+if not config.debug:
+    create_path(config.workspace)
+    create_path(os.path.join(config.workspace, "results"))
+    create_path(exp_dir)
+    create_path(checkpoint_dir)
+
+
+def train():
+    # load dataset 
+    full_dataset = np.load(
+        os.path.join(DATA_PATH, "esc-50-data.npy"), allow_pickle=True
+    )
+    dataset = ESC_Dataset(
+        dataset = full_dataset,
+        config = config,
+        eval_mode = False
+    )
+    eval_dataset = ESC_Dataset(
+        dataset = full_dataset,
+        config = config,
+        eval_mode = True
     )
 
-    # Encode label
-    encoder = LabelEncoder()
-    dataset["target"] = encoder.fit_transform(dataset["category"])
-    num_classes = len(encoder.classes_)
-
-    # Augment data
-    data_augmentor = DataArgumentor(dataset, augmented_path)
-    augmented_files, augmented_targets = data_augmentor.process()
-    dataset_aug = pd.DataFrame(
-        {"files_path": augmented_files, "target": augmented_targets}
-    )
-    dataset = pd.concat([dataset, dataset_aug], ignore_index=True)
-    logging.info(f"\n🟢 Total samples after augmenting: {len(dataset)}")
-
-    # Extract audio features
-    dataset, features = extract_audio_features(dataset)
-
-    # Train-test split
-    X_train, X_test, y_train, y_test = split_and_normalize(dataset, features)
-
-    # Train models
-    audio_cnn_classifier = AudioCNN(
-        input_shape=(X_train.shape[1],), num_classes=num_classes
-    )
-
-    cnn_model = audio_cnn_classifier.build_cnn()
-    cnn_trained_results = train(
-        model_name= "CNN", 
-        model= cnn_model, 
-        X_train= X_train,
-        X_test= X_test, 
-        y_train= y_train, 
-        y_test= y_test
-    )
-
-    bilstm_model = audio_cnn_classifier.build_bilstm()
-    bilstm_trained_results = train(
-        model_name= "Bi-LSTM", 
-        model= bilstm_model , 
-        X_train= X_train,
-        X_test= X_test, 
-        y_train= y_train, 
-        y_test= y_test
-    )
-
-    transformers_model = audio_cnn_classifier.build_transformer()
-    transformers_trained_results = train(
-        model_name= "Transformers", 
-        model= transformers_model, 
-        X_train= X_train,
-        X_test= X_test, 
-        y_train= y_train, 
-        y_test= y_test
+    audioset_data = DataPrerparation(
+        train_dataset = dataset, 
+        eval_dataset = eval_dataset, 
+        device_num = device_num
     )
     
-    trained_results = {
-        "CNN": cnn_trained_results,
-        "Bi-LSTM": bilstm_trained_results,
-        "Transformers": transformers_trained_results,
-    }
-    display_model_comparision(trained_results) 
-
-    # evaluate model 
-    model_results, summary_stats = evaluate_models(
-        models_dict= trained_results, 
-        X_test= X_test, 
-        y_test= y_test, 
-        dataset= dataset, 
-        encoder= encoder, 
-        random_indices= np.random.choice(len(X_test), 1000, replace=False)
+    # initialize model checkpoint which supports to save the best versions of the model 
+    # optimizing storage and training efficiency. 
+    checkpoint_callback = ModelCheckpoint(
+        monitor= "acc",                         # evaluate metric during training.
+        filename=  'l-{epoch:d}-{acc:.3f}',     # save checkpoint with epoch and accuracy
+        save_top_k= 20,                         # keep only the top 20 best checkpoints 
+        mode= "max"                             # save checkpoints only when accuracy improves 
     )
 
-    display_accuracy_summary(summary_stats)
-    display_model_results(model_results)
-
-    plot_confusion_matrices(
-        models_dict= trained_results, 
-        X_test= X_test, 
-        y_test= y_test, 
-        random_indices= np.random.choice(len(X_test), 1000, replace=False)
+    # intialize trainer 
+    trainer = pl.Trainer(
+        deterministic=False,
+        default_root_dir = checkpoint_dir,
+        gpus = device_num, 
+        val_check_interval = 1.0,
+        max_epochs = config.max_epochs,
+        auto_lr_find = True,    
+        sync_batchnorm = True,
+        callbacks = [checkpoint_callback],
+        accelerator = "ddp" if device_num > 1 else None,
+        num_sanity_val_steps = 0,
+        replace_sampler_ddp = False,
+        gradient_clip_val=1.0
     )
+
+    # initialize model 
+    sed_model = HTSAT_Swin_Transformer(
+        spec_size=config.htsat_spec_size,
+        patch_size=config.htsat_patch_size,
+        in_chans=1,
+        num_classes=config.classes_num,
+        window_size=config.htsat_window_size,
+        config = config,
+        depths = config.htsat_depth,
+        embed_dim = config.htsat_dim,
+        patch_stride=config.htsat_stride,
+        num_heads=config.htsat_num_head
+    )
+
+    model = SEDWrapper(
+        sed_model= sed_model, 
+        config = config, 
+        dataset= dataset
+    )
+
+    if config.resume_checkpoint:
+        logging.info(f"Load Checkpoint from {config.resume_checkpoint}")
+        ckpt = torch.load(config.resume_checkpoint, map_location="cpu")
+        ckpt["state_dict"].pop("sed_model.head.weight")
+        ckpt["state_dict"].pop("sed_model.head.bias")
+        ckpt["state_dict"].pop("sed_model.tscam_conv.weight")
+        ckpt["state_dict"].pop("sed_model.tscam_conv.bias")
+        model.load_state_dict(ckpt["state_dict"], strict=False)
+
+    trainer.fit(model, audioset_data)
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(
+        level=logging.INFO,  # Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
+        datefmt="%Y-%m-%d %H:%M:%S"  # Timestamp format
+    )
+    mp.set_start_method("spawn", force=True)
+    train()
