@@ -19,13 +19,14 @@ hop_size = 320
 sample_rate = 32000
 fmin = 50 
 fmax = 14000
-loss_type = "clip_bce"
-dataset_type = "audioset"
+loss_type = "clip_ce"
+dataset_type = "esc50"
 
 debug = False
 fl_local = False 
 enable_tscam = True 
 htsat_attn_heatmap = False
+enable_repeat_mode = False
 exp_name = "exp_htsat_esc_50" # the saved ckpt prefix name of the model
 
 # HTS-AT hyperparameter

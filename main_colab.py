@@ -59,16 +59,14 @@ def train():
     # intialize trainer 
     trainer = pl.Trainer(
         deterministic=False,
-        default_root_dir = checkpoint_dir,
-        gpus = device_num, 
-        val_check_interval = 1.0,
-        max_epochs = config.max_epochs,
-        auto_lr_find = True,    
-        sync_batchnorm = True,
-        callbacks = [checkpoint_callback],
-        accelerator = "ddp" if device_num > 1 else None,
-        num_sanity_val_steps = 0,
-        replace_sampler_ddp = False,
+        default_root_dir=checkpoint_dir,
+        devices=device_num,
+        accelerator="gpu" if device_num > 0 else "cpu",
+        val_check_interval=1.0,
+        max_epochs=config.max_epochs,
+        sync_batchnorm=True,
+        callbacks=[checkpoint_callback],
+        num_sanity_val_steps=0,
         gradient_clip_val=1.0
     )
 
