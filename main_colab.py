@@ -27,9 +27,10 @@ if not config.debug:
 
 def train():
     # load dataset 
-    full_dataset = np.load(
-        os.path.join("/content/drive/MyDrive/ESC-50/", "esc-50-data.npy"), allow_pickle=True
-    )
+    # full_dataset = np.load(
+    #     os.path.join("esc-50-data.npy", "esc-50-data.npy"), allow_pickle=True
+    # )
+    full_dataset = np.load("esc-50-data.npy",  allow_pickle=True)
     dataset = ESC_Dataset(
         dataset = full_dataset,
         config = config,
@@ -51,7 +52,7 @@ def train():
     # optimizing storage and training efficiency. 
     checkpoint_callback = ModelCheckpoint(
         monitor= "acc",                         # evaluate metric during training.
-        filename=  'epoch_{epoch:02d}',     # save checkpoint with epoch and accuracy
+        filename="epoch_{epoch:02d}",     # save checkpoint with epoch and accuracy
         save_top_k= 20,                         # keep only the top 20 best checkpoints 
         mode= "max",                            # save checkpoints only when accuracy improves 
         save_last= True 
