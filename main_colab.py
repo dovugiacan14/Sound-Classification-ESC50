@@ -51,9 +51,10 @@ def train():
     # optimizing storage and training efficiency. 
     checkpoint_callback = ModelCheckpoint(
         monitor= "acc",                         # evaluate metric during training.
-        filename=  'l-{epoch:d}-{acc:.3f}',     # save checkpoint with epoch and accuracy
+        filename=  'epoch_{epoch:02d}',     # save checkpoint with epoch and accuracy
         save_top_k= 20,                         # keep only the top 20 best checkpoints 
-        mode= "max"                             # save checkpoints only when accuracy improves 
+        mode= "max",                            # save checkpoints only when accuracy improves 
+        save_last= True 
     )
 
     # intialize trainer 
