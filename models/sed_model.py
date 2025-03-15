@@ -24,6 +24,7 @@ class SEDWrapper(pl.LightningModule):
         self.config = config
         self.dataset = dataset
         self.loss_func = get_loss_func(config.loss_type)
+        self.validation_step_outputs = []
 
     def evaluate_metric(self, pred, ans):
         if self.config.dataset_type == "audioset":
@@ -65,23 +66,23 @@ class SEDWrapper(pl.LightningModule):
         self.log("loss", loss, on_epoch= True, prog_bar=True)
         return loss
         
-    def training_epoch_end(self, outputs):
-        # Change: SWA, deprecated
-        # for opt in self.trainer.optimizers:
-        #     if not type(opt) is SWA:
-        #         continue
-        #     opt.swap_swa_sgd()
+    def on_training_epoch_end(self, outputs):
         self.dataset.generate_queue()
 
 
     def validation_step(self, batch, batch_idx):
         pred, _ = self(batch["waveform"])
-        return [pred.detach(), batch["target"].detach()]
-    
-    def validation_epoch_end(self, validation_step_outputs):
+        output = [pred.detach(), batch["target"].detach()]
+        self.validation_step_outputs.append(output) 
+        return output
+
+    def on_validation_epoch_end(self):
+        if not self.validation_step_outputs:
+            return  
+
         self.device_type = next(self.parameters()).device
-        pred = torch.cat([d[0] for d in validation_step_outputs], dim = 0)
-        target = torch.cat([d[1] for d in validation_step_outputs], dim = 0)
+        pred = torch.cat([d[0] for d in self.validation_step_outputs], dim=0)
+        target = torch.cat([d[1] for d in self.validation_step_outputs], dim=0)
 
         if torch.cuda.device_count() > 1:
             gather_pred = [torch.zeros_like(pred) for _ in range(dist.get_world_size())]
@@ -89,32 +90,27 @@ class SEDWrapper(pl.LightningModule):
             dist.barrier()
 
         if self.config.dataset_type == "audioset":
-            metric_dict = {
-                "mAP": 0.,
-                "mAUC": 0.,
-                "dprime": 0.
-            }
+            metric_dict = {"mAP": 0., "mAUC": 0., "dprime": 0.}
         else:
-            metric_dict = {
-                "acc":0.
-            }
+            metric_dict = {"acc": 0.}
+
         if torch.cuda.device_count() > 1:
             dist.all_gather(gather_pred, pred)
             dist.all_gather(gather_target, target)
             if dist.get_rank() == 0:
-                gather_pred = torch.cat(gather_pred, dim = 0).cpu().numpy()
-                gather_target = torch.cat(gather_target, dim = 0).cpu().numpy()
+                gather_pred = torch.cat(gather_pred, dim=0).cpu().numpy()
+                gather_target = torch.cat(gather_target, dim=0).cpu().numpy()
                 if self.config.dataset_type == "scv2":
                     gather_target = np.argmax(gather_target, 1)
                 metric_dict = self.evaluate_metric(gather_pred, gather_target)
-                print(self.device_type, dist.get_world_size(), metric_dict, flush = True)
-        
+                print(self.device_type, dist.get_world_size(), metric_dict, flush=True)
+
             if self.config.dataset_type == "audioset":
-                self.log("mAP", metric_dict["mAP"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
-                self.log("mAUC", metric_dict["mAUC"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
-                self.log("dprime", metric_dict["dprime"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
+                self.log("mAP", metric_dict["mAP"] * float(dist.get_world_size()), on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("mAUC", metric_dict["mAUC"] * float(dist.get_world_size()), on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("dprime", metric_dict["dprime"] * float(dist.get_world_size()), on_epoch=True, prog_bar=True, sync_dist=True)
             else:
-                self.log("acc", metric_dict["acc"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
+                self.log("acc", metric_dict["acc"] * float(dist.get_world_size()), on_epoch=True, prog_bar=True, sync_dist=True)
             dist.barrier()
         else:
             gather_pred = pred.cpu().numpy()
@@ -122,15 +118,17 @@ class SEDWrapper(pl.LightningModule):
             if self.config.dataset_type == "scv2":
                 gather_target = np.argmax(gather_target, 1)
             metric_dict = self.evaluate_metric(gather_pred, gather_target)
-            print(self.device_type, metric_dict, flush = True)
-        
+            print(self.device_type, metric_dict, flush=True)
+
             if self.config.dataset_type == "audioset":
-                self.log("mAP", metric_dict["mAP"], on_epoch = True, prog_bar=True, sync_dist=False)
-                self.log("mAUC", metric_dict["mAUC"], on_epoch = True, prog_bar=True, sync_dist=False)
-                self.log("dprime", metric_dict["dprime"], on_epoch = True, prog_bar=True, sync_dist=False)
+                self.log("mAP", metric_dict["mAP"], on_epoch=True, prog_bar=True, sync_dist=False)
+                self.log("mAUC", metric_dict["mAUC"], on_epoch=True, prog_bar=True, sync_dist=False)
+                self.log("dprime", metric_dict["dprime"], on_epoch=True, prog_bar=True, sync_dist=False)
             else:
-                self.log("acc", metric_dict["acc"], on_epoch = True, prog_bar=True, sync_dist=False)
-            
+                self.log("acc", metric_dict["acc"], on_epoch=True, prog_bar=True, sync_dist=False)
+
+        self.validation_step_outputs.clear()  # 🛑 remove data to save memory 
+                
         
     def time_shifting(self, x, shift_len):
         shift_len = int(shift_len)
@@ -161,7 +159,7 @@ class SEDWrapper(pl.LightningModule):
         else:
             return [pred.detach(), batch["target"].detach()]
 
-    def test_epoch_end(self, test_step_outputs):
+    def on_test_epoch_end(self, test_step_outputs):
         self.device_type = next(self.parameters()).device
         if self.config.fl_local:
             pred = np.concatenate([d[0] for d in test_step_outputs], axis = 0)
@@ -213,26 +211,19 @@ class SEDWrapper(pl.LightningModule):
                 self.log("acc", metric_dict["acc"] * float(dist.get_world_size()), on_epoch = True, prog_bar=True, sync_dist=True)
             dist.barrier()
 
-    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
-        scheduler.step()
-
     def configure_optimizers(self):
         optimizer = optim.AdamW(
             filter(lambda p: p.requires_grad, self.parameters()),
-            lr = self.config.learning_rate, 
-            betas = (0.9, 0.999), eps = 1e-08, weight_decay = 0.05, 
+            lr=self.config.learning_rate, 
+            betas=(0.9, 0.999), eps=1e-08, weight_decay=0.05, 
         )
-        # Change: SWA, deprecated
-        # optimizer = SWA(optimizer, swa_start=10, swa_freq=5)
         def lr_foo(epoch):       
             if epoch < 3:
-                # warm up lr
                 lr_scale = self.config.lr_rate[epoch]
             else:
-                # warmup schedule
                 lr_pos = int(-1 - bisect.bisect_left(self.config.lr_scheduler_epoch, epoch))
                 if lr_pos < -3:
-                    lr_scale = max(self.config.lr_rate[0] * (0.98 ** epoch), 0.03 )
+                    lr_scale = max(self.config.lr_rate[0] * (0.98 ** epoch), 0.03)
                 else:
                     lr_scale = self.config.lr_rate[lr_pos]
             return lr_scale
@@ -240,5 +231,11 @@ class SEDWrapper(pl.LightningModule):
             optimizer,
             lr_lambda=lr_foo
         )
-        
-        return [optimizer], [scheduler]
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+            }
+        }
