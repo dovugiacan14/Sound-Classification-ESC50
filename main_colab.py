@@ -28,7 +28,7 @@ if not config.debug:
 def train():
     # load dataset 
     full_dataset = np.load(
-        os.path.join("/content/drive/MyDrive/ESC-50/esc-50-data.npy", "esc-50-data.npy"), allow_pickle=True
+        os.path.join("/content/drive/MyDrive/ESC-50/", "esc-50-data.npy"), allow_pickle=True
     )
     dataset = ESC_Dataset(
         dataset = full_dataset,
