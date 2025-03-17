@@ -10,11 +10,12 @@ AUGMENTED_PATH = "ESC-50-augmented-data"
 esc_fold = 0
 num_workers = 0
 batch_size = 32 # batch size per GPU x GPU number , default is 32 x 4 = 128
-max_epochs = 200
+max_epochs = 100
 learning_rate = 1e-3
 
 mel_bins = 64
-window_size = 1024
+window_size = 32
+# window_size = 1024
 hop_size = 320
 sample_rate = 32000
 fmin = 50 

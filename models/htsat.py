@@ -564,7 +564,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         #  process mel-spec ; used only once
         self.freq_ratio = self.spec_size // self.config.mel_bins
         window = "hann"
-        center = True
+        center = False
         pad_mode = "reflect"
         ref = 1.0
         amin = 1e-10
@@ -594,10 +594,11 @@ class HTSAT_Swin_Transformer(nn.Module):
         )
         # Spec augmenter
         self.spec_augmenter = SpecAugmentation(
-            time_drop_width=64,
+            time_drop_width=min(1, 64),
             time_stripes_num=2,
             freq_drop_width=8,
             freq_stripes_num=2,
+            
         )  # 2 2
         self.bn0 = nn.BatchNorm2d(self.config.mel_bins)
 

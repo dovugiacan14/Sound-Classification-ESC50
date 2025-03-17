@@ -1,3 +1,5 @@
 ESC-50-master/
 workspace/
 __pycache__/
+pretrained_model/
+ESC-50-augmented-data/
