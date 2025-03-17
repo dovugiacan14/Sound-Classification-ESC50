@@ -3,7 +3,6 @@ import torch
 import config
 import logging
 import numpy as np
-from dotenv import load_dotenv
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint 
 import torch.multiprocessing as mp
@@ -14,10 +13,7 @@ from helpers.data_loader import DataPrerparation
 from models.sed_model import SEDWrapper
 from models.htsat import HTSAT_Swin_Transformer
 
-
-load_dotenv()
 device_num = torch.cuda.device_count()
-DATA_PATH = os.environ.get("DATA_PATH")
 
 # create folder to save result  
 exp_dir = os.path.join(config.workspace, "results", config.exp_name)
@@ -31,8 +27,11 @@ if not config.debug:
 
 def train():
     # load dataset 
+    # full_dataset = np.load(
+    #     os.path.join("ESC-50-master/", "esc-50-data.npy"), allow_pickle=True
+    # )
     full_dataset = np.load(
-        os.path.join(DATA_PATH, "esc-50-data.npy"), allow_pickle=True
+        os.path.join("ESC-50-master/", "dataset.npy"), allow_pickle=True
     )
     dataset = ESC_Dataset(
         dataset = full_dataset,
@@ -55,24 +54,23 @@ def train():
     # optimizing storage and training efficiency. 
     checkpoint_callback = ModelCheckpoint(
         monitor= "acc",                         # evaluate metric during training.
-        filename=  'l-{epoch:d}-{acc:.3f}',     # save checkpoint with epoch and accuracy
+        filename="epoch_{epoch:02d}",     # save checkpoint with epoch and accuracy
         save_top_k= 20,                         # keep only the top 20 best checkpoints 
-        mode= "max"                             # save checkpoints only when accuracy improves 
+        mode= "max",                            # save checkpoints only when accuracy improves 
+        save_last= True 
     )
 
     # intialize trainer 
     trainer = pl.Trainer(
         deterministic=False,
-        default_root_dir = checkpoint_dir,
-        gpus = device_num, 
-        val_check_interval = 1.0,
-        max_epochs = config.max_epochs,
-        auto_lr_find = True,    
-        sync_batchnorm = True,
-        callbacks = [checkpoint_callback],
-        accelerator = "ddp" if device_num > 1 else None,
-        num_sanity_val_steps = 0,
-        replace_sampler_ddp = False,
+        default_root_dir=checkpoint_dir,
+        devices=device_num,
+        accelerator="gpu" if device_num > 0 else "cpu",
+        val_check_interval=1.0,
+        max_epochs=config.max_epochs,
+        sync_batchnorm=True,
+        callbacks=[checkpoint_callback],
+        num_sanity_val_steps=0,
         gradient_clip_val=1.0
     )
 
