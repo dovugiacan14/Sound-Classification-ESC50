@@ -52,11 +52,16 @@ def train():
     
     # initialize model checkpoint which supports to save the best versions of the model 
     # optimizing storage and training efficiency. 
+    # checkpoint_callback = ModelCheckpoint(
+    #     monitor= "acc",                         # evaluate metric during training.
+    #     filename="epoch_{epoch:02d}",     # save checkpoint with epoch and accuracy
+    #     save_top_k= 20,                         # keep only the top 20 best checkpoints 
+    #     mode= "max",                            # save checkpoints only when accuracy improves 
+    #     save_last= True 
+    # )
     checkpoint_callback = ModelCheckpoint(
-        monitor= "acc",                         # evaluate metric during training.
-        filename="epoch_{epoch:02d}",     # save checkpoint with epoch and accuracy
-        save_top_k= 20,                         # keep only the top 20 best checkpoints 
-        mode= "max",                            # save checkpoints only when accuracy improves 
+        filename= "final_model",     # save checkpoint with epoch and accuracy
+        save_top_k= 0,               # keep only the top 20 best checkpoints 
         save_last= True 
     )
 
