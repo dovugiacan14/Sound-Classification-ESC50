@@ -1,6 +1,8 @@
 import os
+import librosa
 import numpy as np
 from scipy import stats
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,6 +42,35 @@ def get_mix_lambda(mixup_alpha, batch_size):
         np.random.beta(mixup_alpha, mixup_alpha, 1)[0] for _ in range(batch_size)
     ]
     return np.array(mixup_lambdas).astype(np.float32)
+
+
+def extract_features(audio_path):
+    """
+    Extracts audio features from a given file to match the dataset used for training.
+    """
+    y, sr = librosa.load(audio_path, mono=True)
+
+    features = {
+        "zero_crossing_rate": np.mean(librosa.feature.zero_crossing_rate(y=y)),
+        "chroma_stft": np.mean(librosa.feature.chroma_stft(y=y, sr=sr)),
+        "rmse": np.mean(librosa.feature.rms(y=y)),
+        "spectral_centroid": np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)),
+        "spectral_bandwidth": np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)),
+        "rolloff": np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)),
+    }
+
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    features["beat_per_minute"] = float(tempo)
+
+    # extract mfccs
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
+    for i in range(20):
+        features[f"mfcc_{i}"] = np.mean(mfcc[i])
+
+    features = {key: float(value) for key, value in features.items()}
+    
+    return np.array(list(features.values()), dtype=np.float32)
+
 
 class AsymmetricLoss(nn.Module):
     def __init__(
