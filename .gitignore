@@ -3,3 +3,7 @@ workspace/
 __pycache__/
 pretrained_model/
 ESC-50-augmented-data/
+checkpoints_18032015.zip
+trained_models/
+checkpoints_18032015/
+HTSAT_MODEL/
