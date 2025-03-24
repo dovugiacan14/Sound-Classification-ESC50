@@ -48,28 +48,48 @@ def extract_features(audio_path):
     """
     Extracts audio features from a given file to match the dataset used for training.
     """
-    y, sr = librosa.load(audio_path, mono=True)
+    try:
+        y, sr = librosa.load(audio_path, mono=True)
 
-    features = {
-        "zero_crossing_rate": np.mean(librosa.feature.zero_crossing_rate(y=y)),
-        "chroma_stft": np.mean(librosa.feature.chroma_stft(y=y, sr=sr)),
-        "rmse": np.mean(librosa.feature.rms(y=y)),
-        "spectral_centroid": np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)),
-        "spectral_bandwidth": np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)),
-        "rolloff": np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)),
-    }
+        if len(y) == 0:
+            print(f"Warning: Empty file {audio_path}")
+            return None
 
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    features["beat_per_minute"] = float(tempo)
+        features = {
+            "zero_crossing_rate": np.mean(librosa.feature.zero_crossing_rate(y=y)),
+            "chroma_stft": np.mean(librosa.feature.chroma_stft(y=y, sr=sr)),
+            "rmse": np.mean(librosa.feature.rms(y=y)),
+            "spectral_centroid": np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)),
+            "spectral_bandwidth": np.mean(
+                librosa.feature.spectral_bandwidth(y=y, sr=sr)
+            ),
+            "rolloff": np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)),
+            "spectral_contrast": np.mean(librosa.feature.spectral_contrast(y=y, sr=sr)),
+            "tonnetz": np.mean(librosa.feature.tonnetz(y=y, sr=sr)),
+            "spectral_flatness": np.mean(librosa.feature.spectral_flatness(y=y)),
+            "mel_spectrogram": np.mean(librosa.feature.melspectrogram(y=y, sr=sr)),
+            "chroma_cens": np.mean(librosa.feature.chroma_cens(y=y, sr=sr)),
+        }
 
-    # extract mfccs
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
-    for i in range(20):
-        features[f"mfcc_{i}"] = np.mean(mfcc[i])
+        # Tính tempo (beat per minute)
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        features["beat_per_minute"] = float(tempo)
 
-    features = {key: float(value) for key, value in features.items()}
-    
-    return np.array(list(features.values()), dtype=np.float32)
+        # Trích xuất MFCC (64 giá trị)
+        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
+        log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
+
+        for i in range(64):
+            features[f"mfcc_{i}"] = np.mean(log_mel_spec[i])
+
+        # convert all values intp float32
+        features = {key: float(value) for key, value in features.items()}
+
+        return np.array(list(features.values()), dtype=np.float32)
+
+    except Exception as e:
+        print(f"Error processing {audio_path}: {e}")
+        return None
 
 
 class AsymmetricLoss(nn.Module):

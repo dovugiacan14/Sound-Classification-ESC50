@@ -21,12 +21,14 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
+        default= "trained_models/CNN.h5",
         help="Path to trained model",
     )
 
     parser.add_argument(
         "--audio",
         type=str,
+        default= "ESC-50-master/audio/1-1791-A-26.wav",
         help="Path to audio to predict",
     )
     return parser.parse_args()
@@ -42,8 +44,7 @@ def load_label(audio_file):
         target = label[2]
         gd[name] = target
     encoded_label = str(gd[audio_filename])
-    # return decoder[int(encoded_label)]
-    return encoded_label
+    return decoder[int(encoded_label)]
 
 
 def predict(audio, model, model_type, target_size=32):
@@ -70,8 +71,7 @@ def predict(audio, model, model_type, target_size=32):
             pred_post = pred[0].detach().cpu().numpy()
             pred_label = np.argmax(pred_post)
 
-    # return decoder[pred_label]
-    return pred_label
+    return decoder[pred_label]
 
 def load_trained_model(model_path):
     model_filename = os.path.basename(model_path)

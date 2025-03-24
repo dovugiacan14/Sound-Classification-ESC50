@@ -15,7 +15,6 @@ learning_rate = 1e-3
 
 mel_bins = 64
 window_size = 64
-# window_size = 1024
 hop_size = 320
 sample_rate = 32000
 fmin = 50 
